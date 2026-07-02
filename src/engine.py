@@ -1,161 +1,51 @@
-import datetime
-import re
+import json
 
 class DeepMatchEngine:
     def __init__(self):
-        self.consulting_firms = {
-            "tcs", "tata consultancy", "infosys", "wipro", "accenture", 
-            "cognizant", "capgemini", "hcl", "tech mahindra", "ibm"
-        }
-        
-        self.ir_nlp_keywords = {
-            "retrieval", "ranking", "search", "recommendation", "embeddings", 
-            "vector", "hybrid search", "bm25", "nlp", "information retrieval",
-            "pinecone", "weaviate", "qdrant", "milvus", "opensearch", 
-            "elasticsearch", "faiss", "ndcg", "mrr", "map", "sentence-transformers"
-        }
-        
-        self.disallowed_domains = {"computer vision", "speech recognition", "robotics", "image segmentation"}
+        self.ir_lexicon = ['bm25', 'tf-idf', 'tfidf', 'elasticsearch', 'opensearch', 'solr', 'faiss', 'milvus', 'qdrant', 'chroma', 'weaviate', 'pinecone', 'information retrieval', 'hybrid search', 'dense retrieval', 'sparse retrieval', 'inverted index', 'vector database', 'ranking systems']
+        self.eval_lexicon = ['ndcg', 'mrr', 'map', 'recall@', 'precision@', 'discounted cumulative gain', 'mean reciprocal rank', 'mean average precision', 'ab testing', 'a/b testing', 'offline benchmark']
+        self.product_lexicon = ['saas', 'product company', 'shipped to production', 'scale', 'latency', 'active users', 'deployment', 'deployed to real users', 'infrastructure', 'optimized inference', 'lora', 'qlora', 'fine-tuning', 'peft']
+        self.consulting_lexicon = ['tcs', 'infosys', 'wipro', 'accenture', 'cognizant', 'capgemini', 'hcl', 'tech mahindra', 'pwc', 'ey', 'deloitte', 'kpmg', 'consulting', 'service-based']
 
-    def evaluate_candidate(self, candidate):
-        score = 50.0
-        reasons = []
+    def extract_evidence(self, candidate):
+        profile = candidate.get("profile", {}) or {}
+        history = candidate.get("career_history", []) or []
+        skills = [str(s.get("name", "")).lower() for s in candidate.get("skills", []) or []]
+        signals = candidate.get("redrob_signals", {}) or {}
         
-        signals = candidate.get("redrob_signals", {})
-        experience_list = candidate.get("experience", [])
-        
-        raw_skills = candidate.get("skills", [])
-        skills = []
-        for s in raw_skills:
-            if isinstance(s, dict):
-                skill_name = s.get("name", "") or s.get("skill", "")
-                if skill_name:
-                    skills.append(str(skill_name).lower())
-            elif isinstance(s, str):
-                skills.append(s.lower())
-        
-        total_months = 0
-        product_company_months = 0
-        only_consulting = True
-        has_product_exp = False
-        title_changes = 0
-        
-        has_shipped_ranking_system = False
-        has_pure_research = True
-        has_recent_coding = False
-        
-        current_date = datetime.date(2026, 7, 2)
-        
-        for idx, exp in enumerate(experience_list):
-            company = exp.get("company", "").lower()
-            title = exp.get("title", "").lower()
-            desc = exp.get("description", "").lower()
-            months = exp.get("duration_months", 0)
-            total_months += months
-            
-            is_consulting = any(firm in company for firm in self.consulting_firms)
-            if not is_consulting:
-                only_consulting = False
-                has_product_exp = True
-                product_company_months += months
-            
-            if idx > 0:
-                title_changes += 1
-                
-            if any(kw in desc or kw in title for kw in ["ranking", "search engine", "recommendation system", "retrieval system"]):
-                has_shipped_ranking_system = True
-                
-            if any(kw in desc for kw in ["production", "deployed", "scaled", "kubernetes", "aws", "ci/cd", "pipeline"]):
-                has_pure_research = False
-                
-            if idx == 0 and months >= 18:
-                if not any(kw in title for kw in ["architect", "manager", "director", "vp", "lead"]):
-                    has_recent_coding = True
-                elif any(kw in desc for kw in ["code", "python", "built", "implemented", "shipped"]):
-                    has_recent_coding = True
-            elif idx == 0 and months < 18:
-                has_recent_coding = True
+        current_title = str(profile.get("current_title", "")).lower()
+        summary = str(profile.get("summary", "")).lower()
+        all_text = f"{current_title} {summary} {' '.join(skills)} {' '.join([e.get('description', '') for e in history])}"
 
-        total_years = total_months / 12.0
+        evidence = {}
         
-        if has_pure_research and len(experience_list) > 0:
-            score -= 30
-            reasons.append("Disqualifier: Career history trends toward pure research without clear production deployment.")
-            
-        if only_consulting and len(experience_list) > 0:
-            score -= 25
-            reasons.append("Disqualifier: Candidate history is entirely within IT consulting/service environments.")
-            
-        if not has_recent_coding and total_years > 5:
-            score -= 20
-            reasons.append("Disqualifier: Role footprint tracks as pure architecture/management without active coding indicator.")
+        tech_keywords = ['ai', 'ml', 'nlp', 'llm', 'transformer', 'engineer', 'developer']
+        is_tech_profile = any(k in all_text for k in tech_keywords)
+        is_non_tech_title = any(k in current_title for k in ['marketing', 'hr', 'sales', 'accountant'])
+        coherence = 0.2 if (is_non_tech_title and is_tech_profile) else 1.0
+        evidence['narrative'] = {'score': coherence, 'text': 'Consistent professional trajectory' if coherence > 0.5 else 'Narrative mismatch detected'}
 
-        if 5.0 <= total_years <= 9.0:
-            score += 15
-            reasons.append(f"Optimal total experience range ({total_years:.1f} years).")
-        elif 6.0 <= total_years <= 8.0:
-            score += 20
-            reasons.append(f"Ideal core career experience range ({total_years:.1f} years).")
-        else:
-            score -= 5
+        ir_hits = sum(1 for kw in self.ir_lexicon if kw in all_text)
+        cap_score = min(1.0, ir_hits / 5)
+        evidence['capability'] = {'score': cap_score, 'text': f'Found {ir_hits} IR/Search benchmarks' if ir_hits > 0 else 'Limited IR evidence'}
 
-        if total_years > 0 and (title_changes / (total_years + 1.0)) > 0.7:
-            score -= 15
-            reasons.append("Down-weighted: Job transitions or title progressions suggest short-tenure hopping.")
+        product_hits = sum(1 for kw in self.product_lexicon if kw in all_text)
+        car_score = min(1.0, product_hits / 4)
+        evidence['career'] = {'score': car_score, 'text': 'Strong product development history' if car_score > 0.5 else 'Limited product shipping evidence'}
 
-        skills_text = " ".join(skills)
-        desc_text = " ".join([exp.get("description", "").lower() for exp in experience_list])
+        resp = float(signals.get("recruiter_response_rate", 0.0) or 0.0)
+        avail_score = 1.0 if resp > 0.7 else (0.5 if resp > 0.3 else 0.1)
+        evidence['availability'] = {'score': avail_score, 'text': 'Highly responsive candidate' if avail_score > 0.5 else 'Low engagement signals'}
+
+        return evidence
+
+    def compute_final_score(self, evidence):
+        if evidence['narrative']['score'] < 0.3:
+            return 0.0, "Disqualified: Narrative Incoherence"
         
-        ir_matches = sum(1 for kw in self.ir_nlp_keywords if kw in desc_text or kw in skills_text)
-        disallowed_matches = sum(1 for kw in self.disallowed_domains if kw in skills_text or kw in desc_text)
+        score = (evidence['capability']['score'] * 0.4) + \
+                (evidence['career']['score'] * 0.3) + \
+                (evidence['availability']['score'] * 0.3)
         
-        if "langchain" in skills_text and ir_matches < 2:
-            score -= 15
-            reasons.append("Down-weighted: Profile displays framework proficiency without foundational retrieval/ranking depth.")
-            
-        if has_shipped_ranking_system:
-            score += 20
-            reasons.append("Strong Signal: Demonstrated history building or shipping end-to-end ranking/search/recommendation systems.")
-            
-        if disallowed_matches > 3 and ir_matches < 2:
-            score -= 15
-            reasons.append("Poor Fit: Focus trends strictly toward computer vision, speech, or robotics over IR/NLP.")
-
-        response_rate = signals.get("recruiter_response_rate", 1.0)
-        if response_rate < 0.15:
-            score -= 20
-            reasons.append(f"Critically low recruiter engagement responsiveness ({response_rate * 100:.1f}%).")
-        elif response_rate > 0.70:
-            score += 10
-            reasons.append("High platform availability and recruiter responsiveness interaction.")
-
-        last_active_str = signals.get("last_active_date", "")
-        if last_active_str:
-            try:
-                last_active = datetime.datetime.strptime(last_active_str, "%Y-%m-%d").date()
-                days_inactive = (current_date - last_active).days
-                if days_inactive > 180:
-                    score -= 25
-                    reasons.append(f"Inactive for {days_inactive} days; candidate is effectively unavailable.")
-                elif days_inactive <= 30:
-                    score += 5
-            except ValueError:
-                pass
-
-        notice_period = signals.get("notice_period_days", 90)
-        if notice_period <= 30:
-            score += 10
-            reasons.append(f"Favorable notice footprint ({notice_period} days) for active founding-team onboarding.")
-        elif notice_period > 60:
-            score -= 10
-            reasons.append(f"Extended notice timeline ({notice_period} days) flags deployment speed risks.")
-
-        gh_score = signals.get("github_activity_score", -1)
-        if gh_score > 60:
-            score += 10
-            reasons.append("Strong open-source or public code distribution presence.")
-
-        final_score = max(0.0, min(100.0, score))
-        reasoning_summary = " | ".join(reasons) if reasons else "Mainline profile compliance alignment."
-        
-        return final_score, reasoning_summary
+        reasons = f"{evidence['capability']['text']}; {evidence['career']['text']}"
+        return score, reasons
