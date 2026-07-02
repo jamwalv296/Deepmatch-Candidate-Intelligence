@@ -24,7 +24,7 @@ class DeepMatchPipeline:
                 })
 
         candidates_scored.sort(key=lambda x: x["candidate_id"])
-        candidates_scored.sort(key=lambda x: x["score"], reverse=True)
+        candidates_scored.sort(key=lambda x: round(x["score"], 4), reverse=True)
         
         top_100 = candidates_scored[:100]
 
