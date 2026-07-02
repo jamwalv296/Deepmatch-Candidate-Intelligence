@@ -1,9 +1,10 @@
-# DeepMatch — Redrob AI Candidate Ranking
+# DeepMatch — Explainable Candidate Ranking Engine
+DeepMatch ranks candidates using semantic retrieval, evidence fusion, and recruiter-aware validation instead of traditional keyword matching.
 
-## Approach
-1. **Semantic fit (35%)** — TF-IDF (1-2 gram) cosine similarity between each candidate's profile/skills/career text and the job description, fit once over the full corpus for speed.
-2. **Technical evidence (30%)** — coverage of must-have (embeddings, vector DBs, retrieval, eval metrics) and nice-to-have JD terms.
-3. **Career evidence (20%)** — years-of-experience fit to the JD's 5-9 yr band + evidence of having shipped production systems (not just listing tools).
+## Ranking Pipeline
+1. **Semantic fit (35%)** — TF–IDF (1–2 gram) vectorization over the complete candidate corpus followed by batched cosine similarity against the Job Description.
+2. **Technical evidence (30%)** — Benchmarks demonstrated technical evidence against must-have and preferred competencies extracted from the Job Description.
+3. **Career evidence (20%)** — Evaluates production ownership, engineering progression, and experience alignment in addition to years-of-experience fit.
 4. **Recruitability (15%)** — recruiter response rate, activity recency, notice period, location fit, open-to-work flag.
 5. **Gates (multiplicative, not additive)**:
    - Hard disqualifier gate: research-only backgrounds, consulting-only history, CV/speech/robotics without NLP, architecture/lead roles without recent coding, LangChain-only "AI experience".
@@ -18,7 +19,7 @@ python main.py path/to/job_description.docx
 ```
 Outputs `team_submission.csv` (candidate_id, rank, score, reasoning), validated against `validate_submission.py`.
 
-## Files
+## Project Structure
 - `src/jd_profile.py` — structured JD requirements (must-haves, disqualifiers, preferred locations)
 - `src/engine.py` — scoring engine
 - `pipeline.py` — streaming load + heap-bounded top-100 selection
