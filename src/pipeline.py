@@ -23,7 +23,9 @@ class DeepMatchPipeline:
                     "reasoning": reasoning
                 })
 
-        candidates_scored.sort(key=lambda x: (-x["score"], x["candidate_id"]))
+        candidates_scored.sort(key=lambda x: x["candidate_id"])
+        candidates_scored.sort(key=lambda x: x["score"], reverse=True)
+        
         top_100 = candidates_scored[:100]
 
         with open(self.output_path, mode="w", newline="", encoding="utf-8") as f:
