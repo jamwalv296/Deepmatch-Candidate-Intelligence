@@ -1,7 +1,6 @@
 import gzip
 import json
 import csv
-
 from src.engine import DeepMatchEngine
 
 class DeepMatchPipeline:
