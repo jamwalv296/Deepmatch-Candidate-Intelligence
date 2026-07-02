@@ -1,4 +1,3 @@
-import gzip
 import json
 import csv
 from src.engine import DeepMatchEngine
@@ -11,7 +10,7 @@ class DeepMatchPipeline:
 
     def run(self):
         candidates_scored = []
-        with gzip.open(self.data_path, "rt", encoding="utf-8") as f:
+        with open(self.data_path, "rt", encoding="utf-8") as f:
             for line in f:
                 if not line.strip():
                     continue
