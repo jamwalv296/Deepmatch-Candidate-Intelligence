@@ -18,18 +18,22 @@ class DeepMatchEngine:
         self.disallowed_domains = {"computer vision", "speech recognition", "robotics", "image segmentation"}
 
     def evaluate_candidate(self, candidate):
-        """
-        Evaluates a candidate profile against the Senior AI Engineer (Founding Team) role.
-        Returns: (score: float, reasoning: str)
-        """
-        score = 50.0 
+        score = 50.0
         reasons = []
         
         signals = candidate.get("redrob_signals", {})
         experience_list = candidate.get("experience", [])
-        skills = [s.lower() for s in candidate.get("skills", [])]
         
-      
+        raw_skills = candidate.get("skills", [])
+        skills = []
+        for s in raw_skills:
+            if isinstance(s, dict):
+                skill_name = s.get("name", "") or s.get("skill", "")
+                if skill_name:
+                    skills.append(str(skill_name).lower())
+            elif isinstance(s, str):
+                skills.append(s.lower())
+        
         total_months = 0
         product_company_months = 0
         only_consulting = True
@@ -117,7 +121,6 @@ class DeepMatchEngine:
             score -= 15
             reasons.append("Poor Fit: Focus trends strictly toward computer vision, speech, or robotics over IR/NLP.")
 
-       
         response_rate = signals.get("recruiter_response_rate", 1.0)
         if response_rate < 0.15:
             score -= 20
